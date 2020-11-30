@@ -1,0 +1,38 @@
+using com.apamax.rpi.gpio.Setup;
+using com.apamax.rpi.gpio.LED;
+
+event Step
+{
+	integer i;
+}
+
+monitor BasicLED {
+
+	action onload() {
+		// Setup GPIO access to the pins
+		(new Setup).setOutputPins([17]).init();
+
+		// Log the Raspberry Pi info to the correlator log
+		log com.apamax.rpi.gpio.Info.getInfo().toString();
+		
+		// Create an LED event on pin 17
+		LED led := (new LED).init(17, false);
+		
+		// Turn the LED on
+		led.setOn();
+		if not (led.isHigh()) {
+			log "TEST FAILED";
+		}
+		log "LED on";
+
+		on Step(1)
+		{
+			// Turn the LED off
+			led.setOff();
+			if (led.isHigh()) {
+				log "TEST FAILED";
+			}
+			log "LED off";
+		}
+	}
+}

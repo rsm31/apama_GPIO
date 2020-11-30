@@ -1,0 +1,90 @@
+using com.apamax.rpi.gpio.Setup;
+using com.apamax.rpi.gpio.LED;
+
+event ActivateSoftPWM
+{
+//	float dutyCycle;
+//	float range;
+	dictionary<float, float> combinations;
+}
+
+monitor SPWM {
+	/** @private */
+	import "GPIOPlugin" as GPIOPlugin;
+
+	action onload() {
+		// Setup GPIO access to the pins
+		(new Setup).setOutputPins([18]).init();
+
+		// Log the Raspberry Pi info to the correlator log
+		log com.apamax.rpi.gpio.Info.getInfo().toString();
+		
+		// Create an LED event on pin 18
+		LED led := (new LED).init(18, false);
+		
+		// Turn the LED off
+		led.setOff();
+		if (led.isHigh()) {
+			log "TEST FAILED";
+		}
+		log "LED off";
+	
+		ActivateSoftPWM aspwm;		
+		on all ActivateSoftPWM(): aspwm
+		{	
+			float dutyCycle;
+		
+			//For each combination of range and duty cycle that needs testing	
+			for dutyCycle in aspwm.combinations.keys()
+			{
+				float range := aspwm.combinations[dutyCycle];
+				log "About to test Duty Cycle " + dutyCycle.toString() + " and range " + range.toString() at INFO;
+				led.createSoftPWM(dutyCycle,range);
+				float i:=0.0;
+				float ons := 0.0;
+				float offs := 0.0;
+				float blockValue := (range/1000.0);
+				integer roundedBlock := blockValue.ceil();
+				while i < (range)
+				{
+					// Will only return 0 or 1
+					integer value := led.getDigitalRead();
+					if (value=1){
+						ons := ons + 1.0;
+					}
+					else{
+						offs := offs + 1.0;
+					}
+					//log "Current Value " + value.toString() at INFO;
+					GPIOPlugin.block(roundedBlock);		
+					i:=i+1.0;
+				}
+			
+				log "Ons " + ons.toString() + "  Offs " + offs.toString() at INFO;
+				float onsPercentOfRange := (ons*100.0)/range;
+				float expected := (dutyCycle*100.0)/range;
+			
+				print "The Number of Ons as a percent of Range " + onsPercentOfRange.toString();
+				print "Expected is " + expected.toString();
+				if (not onsPercentOfRange = expected){
+					float diff := expected-onsPercentOfRange;
+					if(diff>2.0 or diff < -2.0){
+						log "Test Failed - Expected Percentage was " + expected.toString() + " but the calcuted percentage is " + onsPercentOfRange.toString()  at ERROR;
+					}	
+					else{
+						log "Test Passed " at INFO;
+					}
+			
+				}
+			
+				//Ensure the LED is turned off
+				led.writeSoftPWM(0.0);
+				//block between tests
+				GPIOPlugin.block(1000);
+				led.stopSoftPWM();
+			}
+			log "Test Complete" at INFO;
+		}
+
+	}
+}
